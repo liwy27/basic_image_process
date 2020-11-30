@@ -1,10 +1,34 @@
 from matplotlib import pyplot as plt
-import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
-import numpy as np
-import math
+import matplotlib.cm as cm
+from numba import jit
+import time
+from functools import wraps
 import cv2 as cv
-from scipy.fftpack import fft2, ifft2, fftshift
+import numpy as np
+# from numpy.fft import fft2, ifft2, fftshift
+
+obj_path = './data/20201128/mid_ring/mid_ring_220ms_pos.bmp'
+psf_path = './data/20201128/point/point_550ms_pos.bmp'
+USE_CUDA = False
+
+if USE_CUDA:
+    import cupy as cp
+    from cupy.fft import fft2, ifft2, fftshift
+    from cupy import abs, conj
+else:
+    from numpy import abs, conj
+    from scipy.fftpack import fft2, ifft2, fftshift
+
+
+def time_cost(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        a = time.time()
+        func_out = func(*args, **kwargs)
+        print("total time:{:.4f}s".format(time.time()-a))
+        return func_out
+    return wrapped
 
 
 def inverse(input, PSF, eps):
@@ -15,69 +39,69 @@ def inverse(input, PSF, eps):
     return result
 
 
-def wiener(input, PSF, eps, K=100.):
-    input_fft = fft2(input)
-    PSF_fft = fft2(PSF)
-    PSF_fft_1 = np.conj(PSF_fft) / (np.abs(PSF_fft)**2 + K)
-    result = ifft2(input_fft * PSF_fft_1)
-    result = np.abs(fftshift(result))
+@time_cost
+def wiener(inp, psf, eps=0, k=10000000.):
+    input_fft = fft2(inp)
+    psf_fft = fft2(psf) + eps
+    psf_fft = conj(psf_fft) / (abs(psf_fft)**2 + k)
+    result = ifft2(input_fft * psf_fft)
+    result = abs(fftshift(result))
     # result = np.abs(result)
     return result
 
 
-def normal(array):
+@jit(nopython=True)
+def clip(array):
     array = np.where(array < 0,  0, array)
     array = np.where(array > 255, 255, array)
-    array = array.astype(np.uint8)
-    return array
+    return array.astype(np.uint8)
 
 
-diffused_src = cv.imread('./wu_exam_2.png')
+@jit(nopython=True)
+def normalize(array):
+    max_value = np.max(array)
+    min_value = np.min(array)
+    return (array - min_value) / (max_value - min_value)
+
+
+diffused_src = cv.imread(obj_path)
 # diffused_tem = cv.split(diffused_src)
 # diffused = diffused_tem[0]
 
 diffused = cv.cvtColor(diffused_src, cv.COLOR_BGR2GRAY)
-# diffused = diffused / 255.
-max_value = np.max(diffused)
-min_value = np.min(diffused)
-diffused = (diffused - min_value) / (max_value - min_value)
-plt.figure(1)
+diffused = normalize(diffused)
+plt.figure(figsize=(16, 16))
 plt.xlabel('diffused')
+plt.subplot(221)
 im = plt.imshow(diffused, cmap=cm.hot)
-plt.colorbar(im)
-plt.show()
+# plt.colorbar(im)
 
-PSF_src = cv.imread('./point_exam_2.png')
+
+PSF_src = cv.imread(psf_path)
 # PSF_tem = cv.split(PSF_src)
 # PSF = PSF_tem[0]
-PSF = cv.cvtColor(PSF_src, cv.COLOR_BGR2GRAY)
-# PSF = PSF / 255.
-max_value = np.max(PSF)
-min_value = np.min(PSF)
-PSF = (PSF - min_value) / (max_value - min_value)
 
-plt.figure(2)
+PSF = cv.cvtColor(PSF_src, cv.COLOR_BGR2GRAY)
+PSF = normalize(PSF)
 plt.xlabel('PSF')
+plt.subplot(222)
 im = plt.imshow(PSF, cmap=cm.hot)
-plt.colorbar(im)
-plt.show()
+# plt.colorbar(im)
+
+if USE_CUDA:
+    diffused = cp.array(diffused)
+    PSF = cp.array(PSF)
 
 reconstruct = wiener(diffused, PSF, 0)
-max_value = np.max(reconstruct)
-min_value = np.min(reconstruct)
-reconstruct = (reconstruct - min_value) / (max_value - min_value)
-# reconstruct = reconstruct/max_value
+reconstruct = normalize(reconstruct)
 
 out = 255*reconstruct
-out = normal(out)
+out = clip(out)
 cv.imwrite('out.jpg', out)
 
-cv.imshow("out", out)
-cv.waitKey(10000)
-plt.figure(3)
 plt.xlabel('reslut')
+plt.subplot(212)
 im = plt.imshow(reconstruct, cmap=cm.hot)
 plt.colorbar(im)
 plt.show()
-
-
+print("ok!you are very good!")
