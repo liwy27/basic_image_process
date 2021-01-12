@@ -8,7 +8,7 @@ import cv2 as cv
 import numpy as np
 
 
-def hist(img):
+def hist_balance(img):
     src = np.copy(img)
     img_flatten = img.flatten()
     img_flatten[0] = 255
@@ -23,7 +23,7 @@ def hist(img):
     return src
 
 
-def draw(img, filename, channel=-1):
+def draw_hist(img, filename, channel=-1):
     img_flatten = img.flatten()
     count = np.bincount(img_flatten)
     count = count / np.max(count)
@@ -49,15 +49,15 @@ def draw(img, filename, channel=-1):
 
 img = cv.imread(r"E:\BaiduNetdiskDownload\tid2013\hist.jpg")
 img_b, img_g, img_r = cv.split(img)
-img_b_2 = hist(img_b)
-img_g_2 = hist(img_g)
-img_r_2 = hist(img_r)
+img_b_2 = hist_balance(img_b)
+img_g_2 = hist_balance(img_g)
+img_r_2 = hist_balance(img_r)
 img_good = cv.merge([img_b_2, img_g_2, img_r_2])
 cv.imshow("bad", img)
 cv.imshow("good", img_good)
 
-dst_1 = draw(img_g, "img_g_hist", 1)
-dst_2 =draw(img_g_2, "img_g_2_hist",1)
+dst_1 = draw_hist(img_g, "img_g_hist", 1)
+dst_2 =draw_hist(img_g_2, "img_g_2_hist",1)
 
 cv.imshow("hist_1", dst_1)
 cv.imshow("hist_2", dst_2)
