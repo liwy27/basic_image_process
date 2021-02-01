@@ -1,0 +1,44 @@
+# -*- coding: utf-8 -*-
+import cv2
+import numpy as np
+import time
+
+
+def getavgstd(image):
+    avg = []
+    std = []
+    image_avg_l = np.mean(image[:,:,0])
+    image_std_l = np.std(image[:,:,0])
+    image_avg_a = np.mean(image[:,:,1])
+    image_std_a = np.std(image[:,:,1])
+    image_avg_b = np.mean(image[:,:,2])
+    image_std_b = np.std(image[:,:,2])
+    avg.append(image_avg_l)
+    avg.append(image_avg_a)
+    avg.append(image_avg_b)
+    std.append(image_std_l)
+    std.append(image_std_a)
+    std.append(image_std_b)
+    return (avg,std)
+
+
+def transfer(src, src_avg, src_std, template_avg, template_std):
+    src = src.astype(np.float)
+    for k in range(3):
+        src[:, :, k] = (src[:, :, k] - src_avg[k]) * (template_std[k] / src_std[k]) + template_avg[k]
+    src = np.clip(src, 0, 255)
+    return src.astype(np.uint8)
+
+
+if __name__ == '__main__':
+    image = cv2.imread('./img/moundain/ming_src.png')
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    original = cv2.imread('./img/laifushi/laifushi_src.png')
+    original = cv2.cvtColor(original, cv2.COLOR_BGR2LAB)
+    a = time.time()
+    image_avg, image_std = getavgstd(image)
+    original_avg, original_std = getavgstd(original)
+    image = transfer(image, image_avg, image_std, original_avg, original_std)
+    image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
+    print(time.time()-a)
+    cv2.imwrite('out.jpg',image)
